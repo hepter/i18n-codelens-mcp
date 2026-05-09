@@ -1,0 +1,15 @@
+{
+  "nav": {
+    "home": "Ana Sayfa",
+    "about": "Hakkımızda"
+  },
+  "msg": {
+    "welcome": "Hoş geldin {{name}}!",
+    "farewell": "Güle güle",
+    "count": "Sende {adet} öğe var"
+  },
+  "btn": {
+    "save": "Kaydet",
+    "cancel": "İptal"
+  }
+}

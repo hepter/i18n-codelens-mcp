@@ -1,0 +1,9 @@
+{
+  "greeting": "Merhaba",
+  "farewell": "Güle güle",
+  "nav.home": "Ana Sayfa",
+  "nav.about": "Hakkımızda",
+  "msg.welcome": "Hoş geldin {{name}}!",
+  "msg.count": "Sende {adet} öğe var",
+  "btn.save": "Kaydet"
+}

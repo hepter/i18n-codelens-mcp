@@ -1,0 +1,23 @@
+{
+  "nav": {
+    "home": "Home",
+    "about": "About",
+    "contact": "Contact"
+  },
+  "msg": {
+    "welcome": "Welcome {{name}}!",
+    "farewell": "Goodbye",
+    "count": "You have {count} items",
+    "error": "Something went wrong"
+  },
+  "btn": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "auth": {
+    "login": "Log in",
+    "logout": "Log out",
+    "register": "Register"
+  }
+}

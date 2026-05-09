@@ -1,0 +1,41 @@
+export * from './config';
+export * from './resourceUtils';
+export * from './toolUtils';
+export {
+  getWorkspaceRoot,
+  readResourceFiles,
+  writeFilePretty,
+  loadJson,
+  findUntranslatedKeysInFile,
+  findKeyReferences,
+  ensureSafeWorkspacePath,
+  type ResourceFile,
+  type KeyReference,
+  type KeyReferenceSummary,
+} from './i18nFs';
+export {
+  createI18nMcpServer,
+  startServer,
+  normalizeLocaleTag,
+  describeLocale,
+  extractPlaceholders,
+  relativeToWorkspace,
+  toolProjectInfo,
+  toolSearchKeys,
+  toolGetNamespace,
+  toolUnusedKeys,
+  toolAudit,
+  toolFormatResources,
+  toolCheckKeys,
+  toolListLocales,
+  toolGetTranslations,
+  toolUpsertTranslations,
+  toolDeleteKey,
+  toolDiffLocales,
+  toolScanWorkspaceMissing,
+  toolKeyReferences,
+  toolRenameKey,
+  toolMoveNamespace,
+  toolValidatePlaceholders,
+  toolUntranslatedKeysOnPage,
+} from './server';
