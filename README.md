@@ -25,22 +25,55 @@ npm install -g i18n-codelens-mcp
 
 ## Client setup
 
-Every client uses the same stdio command. When the client starts the server from the project directory (or sets `CLAUDE_PROJECT_DIR`, as Claude Code does) no other configuration is needed; otherwise pass the project with `WORKSPACE_ROOT`.
+Every command below registers the same thing: a stdio server named `i18n-codelens` running `npx -y i18n-codelens-mcp`. Pick your client, run one line, done.
+
+The server needs to know which project to work on. Most clients start it in the project directory, and Claude Code passes the project root explicitly, so nothing else is needed. When your client starts the server from somewhere else, add the project path with the client's env flag, for example `-e WORKSPACE_ROOT=/absolute/path/to/project`.
+
+> **Windows PowerShell:** PowerShell can swallow a bare `--` before it reaches the CLI, which then reports `unknown option '-y'`. If that happens, quote the separator as `'--'`, or run the command from `cmd`, Git Bash or WSL.
 
 ### Claude Code
 
 ```bash
-# project scope, committed as .mcp.json so every teammate and agent gets it
-claude mcp add --scope project --transport stdio i18n-codelens -- npx -y i18n-codelens-mcp
-# user scope
-claude mcp add --transport stdio i18n-codelens -- npx -y i18n-codelens-mcp
+# for the whole team: writes .mcp.json in the repo
+claude mcp add --scope project i18n-codelens -- npx -y i18n-codelens-mcp
+
+# just for you, in every project
+claude mcp add --scope user i18n-codelens -- npx -y i18n-codelens-mcp
 ```
 
-Claude Code sets `CLAUDE_PROJECT_DIR` for stdio servers, so the server always finds the right project. Its tool-search feature defers MCP tools; `i18n_upsert_translations` and `i18n_get_translations` are marked `anthropic/alwaysLoad` so the two everyday tools are available without a lookup. The server's prompts appear as `/i18n-codelens:audit`, `/i18n-codelens:add-key` and `/i18n-codelens:translate-missing`.
+Claude Code sets `CLAUDE_PROJECT_DIR` for stdio servers, so the server always finds the right project. Its tool-search feature defers MCP tools; `i18n_upsert_translations` and `i18n_get_translations` are marked `anthropic/alwaysLoad` so the two everyday tools need no lookup. The prompts show up as `/i18n-codelens:audit`, `/i18n-codelens:add-key` and `/i18n-codelens:translate-missing`.
 
-### Google Antigravity (IDE, CLI and 2.0)
+<details>
+<summary>Manual configuration</summary>
 
-Global `~/.gemini/config/mcp_config.json` (Windows: `%USERPROFILE%\.gemini\config\mcp_config.json`) or per project `.agents/mcp_config.json`. In the IDE: **…** → **MCP Servers** → **Manage MCP Servers** → **View raw config**; in the CLI type `/mcp`.
+Project scope is `.mcp.json` in the repository root:
+
+```json
+{
+  "mcpServers": {
+    "i18n-codelens": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"]
+    }
+  }
+}
+```
+
+</details>
+
+### Google Antigravity
+
+```bash
+agy mcp add i18n-codelens -- npx -y i18n-codelens-mcp
+```
+
+`agy mcp list`, `agy mcp disable i18n-codelens` and `agy mcp remove i18n-codelens` manage it afterwards. Inside the IDE, `/mcp` opens the MCP manager.
+
+<details>
+<summary>Manual configuration</summary>
+
+Global is `~/.gemini/config/mcp_config.json` (Windows: `%USERPROFILE%\.gemini\config\mcp_config.json`), per project `.agents/mcp_config.json`. In the IDE: **…** → **MCP Servers** → **Manage MCP Servers** → **View raw config**.
 
 ```json
 {
@@ -55,23 +88,49 @@ Global `~/.gemini/config/mcp_config.json` (Windows: `%USERPROFILE%\.gemini\confi
 }
 ```
 
-### Cursor, Windsurf, Claude Desktop, Kiro, Cline, Roo Code
+Antigravity also accepts `disabled: true` and `disabledTools: ["i18n_format_resources"]` per server.
 
-Same `mcpServers` shape in the client's config file (`.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, Claude Desktop config, `.kiro/settings/mcp.json`, `cline_mcp_settings.json`, `.roo/mcp.json`):
+</details>
 
-```json
-{
-  "mcpServers": {
-    "i18n-codelens": {
-      "command": "npx",
-      "args": ["-y", "i18n-codelens-mcp"],
-      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" }
-    }
-  }
-}
+### Gemini CLI
+
+```bash
+gemini mcp add -s user i18n-codelens npx -y i18n-codelens-mcp
 ```
 
-### VS Code / GitHub Copilot Chat (`.vscode/mcp.json`)
+Use `-s project` to write the project's settings instead. Gemini takes the command and its arguments positionally, so no `--` is needed.
+
+### OpenAI Codex CLI
+
+```bash
+codex mcp add i18n-codelens -- npx -y i18n-codelens-mcp
+```
+
+<details>
+<summary>Manual configuration</summary>
+
+`~/.codex/config.toml`:
+
+```toml
+[mcp_servers.i18n-codelens]
+command = "npx"
+args = ["-y", "i18n-codelens-mcp"]
+```
+
+</details>
+
+### VS Code and Copilot Chat
+
+```bash
+code --add-mcp "{\"name\":\"i18n-codelens\",\"command\":\"npx\",\"args\":[\"-y\",\"i18n-codelens-mcp\"]}"
+```
+
+That writes the user profile. **MCP: Add Server** in the Command Palette does the same through a guided flow and can target the workspace.
+
+<details>
+<summary>Manual configuration</summary>
+
+`.vscode/mcp.json` in the repository, which you can commit:
 
 ```json
 {
@@ -86,7 +145,48 @@ Same `mcpServers` shape in the client's config file (`.cursor/mcp.json`, `~/.cod
 }
 ```
 
-### GitHub Copilot CLI (`~/.copilot/mcp-config.json`, or `.github/mcp.json` in the repo)
+</details>
+
+### OpenCode
+
+```bash
+opencode mcp add i18n-codelens -- npx -y i18n-codelens-mcp
+```
+
+<details>
+<summary>Manual configuration</summary>
+
+`opencode.json` in the project root, or `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "i18n-codelens": {
+      "type": "local",
+      "command": ["npx", "-y", "i18n-codelens-mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+</details>
+
+### GitHub Copilot CLI
+
+Copilot CLI adds servers from inside a session rather than from the shell. Start `copilot`, then:
+
+```text
+/mcp add
+```
+
+Fill in the form: **Server Name** `i18n-codelens`, **Server Type** `STDIO`, **Command** `npx -y i18n-codelens-mcp`. `/mcp`, `/mcp show i18n-codelens` and `/mcp delete i18n-codelens` manage it afterwards.
+
+<details>
+<summary>Manual configuration</summary>
+
+User level is `~/.copilot/mcp-config.json`; for a repository commit `.github/mcp.json`, or drop an uncommitted `.mcp.json` at the project root.
 
 ```json
 {
@@ -95,43 +195,137 @@ Same `mcpServers` shape in the client's config file (`.cursor/mcp.json`, `~/.cod
       "type": "local",
       "command": "npx",
       "args": ["-y", "i18n-codelens-mcp"],
-      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" },
+      "env": {},
       "tools": ["*"]
     }
   }
 }
 ```
 
-### Codex CLI, Gemini CLI, OpenCode, Zed
+</details>
 
-```bash
-codex mcp add i18n-codelens -- npx -y i18n-codelens-mcp
-gemini mcp add -s user i18n-codelens npx -y i18n-codelens-mcp
-```
+### Cursor, Windsurf, Claude Desktop, Kiro, Cline and Roo Code
+
+These clients have no command to add a server, so the configuration file is the way in. The shape is the same everywhere; only the path differs.
+
+<details>
+<summary>Cursor and Windsurf</summary>
+
+`.cursor/mcp.json` in the project or `~/.cursor/mcp.json`; Windsurf uses `~/.codeium/windsurf/mcp_config.json`.
 
 ```json
-// opencode.json
-{ "mcp": { "i18n-codelens": { "type": "local", "command": ["npx", "-y", "i18n-codelens-mcp"], "environment": { "WORKSPACE_ROOT": "/absolute/path/to/project" } } } }
+{
+  "mcpServers": {
+    "i18n-codelens": {
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" }
+    }
+  }
+}
 ```
 
+`cursor-agent mcp list` and `cursor-agent mcp enable i18n-codelens` manage it from the terminal once it is configured.
+
+</details>
+
+<details>
+<summary>Claude Desktop</summary>
+
+Open **Settings** → **Developer** → **Edit Config**.
+
 ```json
-// Zed settings.json / .zed/settings.json
-{ "context_servers": { "i18n-codelens": { "source": "custom", "command": "npx", "args": ["-y", "i18n-codelens-mcp"], "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" } } } }
+{
+  "mcpServers": {
+    "i18n-codelens": {
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" }
+    }
+  }
+}
 ```
+
+</details>
+
+<details>
+<summary>Kiro</summary>
+
+Command palette: **Kiro: Open workspace MCP config (JSON)** for `.kiro/settings/mcp.json`, or the user config at `~/.kiro/settings/mcp.json`.
+
+```json
+{
+  "mcpServers": {
+    "i18n-codelens": {
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" },
+      "disabled": false,
+      "autoApprove": ["i18n_project_info", "i18n_get_translations", "i18n_search_keys", "i18n_file_keys", "i18n_key_references", "i18n_audit"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>Zed</summary>
+
+`~/.config/zed/settings.json`, or `.zed/settings.json` for the team. Zed calls MCP servers `context_servers`.
+
+```json
+{
+  "context_servers": {
+    "i18n-codelens": {
+      "source": "custom",
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>Cline and Roo Code</summary>
+
+Open the extension panel → **MCP Servers** → **Configure MCP Servers**. Cline writes `cline_mcp_settings.json`, Roo Code `mcp_settings.json` or `.roo/mcp.json` per project.
+
+```json
+{
+  "mcpServers": {
+    "i18n-codelens": {
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+</details>
 
 ### Sharing with a team
 
-| Client | Project-level file |
-|---|---|
-| Claude Code | `.mcp.json` |
-| GitHub Copilot CLI | `.github/mcp.json` or `.mcp.json` |
-| Antigravity | `.agents/mcp_config.json` |
-| Kiro | `.kiro/settings/mcp.json` |
-| Zed | `.zed/settings.json` |
-| OpenCode | `opencode.json` |
-| Cursor | `.cursor/mcp.json` |
-| VS Code / Copilot Chat | `.vscode/mcp.json` |
-| Roo Code | `.roo/mcp.json` |
+Commit a project-level configuration so every teammate and every agent picks up the same server without touching global settings.
+
+| Client | Project-level file | One-liner |
+|---|---|---|
+| Claude Code | `.mcp.json` | `claude mcp add --scope project i18n-codelens -- npx -y i18n-codelens-mcp` |
+| Antigravity | `.agents/mcp_config.json` | |
+| GitHub Copilot CLI | `.github/mcp.json` or `.mcp.json` | |
+| VS Code / Copilot Chat | `.vscode/mcp.json` | |
+| Gemini CLI | project settings | `gemini mcp add -s project i18n-codelens npx -y i18n-codelens-mcp` |
+| OpenCode | `opencode.json` | `opencode mcp add i18n-codelens -- npx -y i18n-codelens-mcp` |
+| Cursor | `.cursor/mcp.json` | |
+| Kiro | `.kiro/settings/mcp.json` | |
+| Zed | `.zed/settings.json` | |
+| Roo Code | `.roo/mcp.json` | |
 
 ## Workspace root
 
