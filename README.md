@@ -1,6 +1,6 @@
 # i18n-codelens-mcp
 
-Model Context Protocol (MCP) server for i18n translation files. It lets AI agents (Claude Code, Cursor, Antigravity, GitHub Copilot, Codex, Gemini CLI and any other MCP client) inspect, audit and **safely** edit locale JSON files without ever loading a 600 KB `en.json` into the model context.
+Model Context Protocol (MCP) server for i18n translation files. It lets AI agents (Claude Code, Cursor, Antigravity, GitHub Copilot, Codex, Gemini CLI and any other MCP client) inspect, audit and **safely** edit locale JSON files without ever loading a whole locale file into the model context.
 
 - **Compact by design.** Ten tools, single-line JSON results, no echoed input, `limit`/`includeValues` everywhere. A typical read costs 50-200 tokens.
 - **Safe by construction.** No write path can reduce a locale file's key set; mixed flat/nested files are edited in place, never converted; upserts report conflicts instead of overwriting.
@@ -264,7 +264,7 @@ Every tool is exported as a plain async function taking `(args, ctx)`, alongside
 ### 2.0.0
 
 - **SDK v2 / protocol 2026-07-28.** `@modelcontextprotocol/server` with `serveStdio`, zod 4, Node 20+. Both the 2026-07-28 and 2025 revisions are served on stdio. `tools/list` and `prompts/list` carry cache hints.
-- **Ten tools instead of eighteen**, compact single-line results, no `structuredContent`, no echoed arguments. Tool definitions shrank from 13.5 K to 9.5 K characters; a 50-hit search dropped from ~12 K to ~1.8 K characters.
+- **Ten tools instead of eighteen**, compact single-line results, no `structuredContent`, no echoed arguments. Tool definitions shrank from 13.5 K to 9.5 K characters. Measured against 1.x on the same project, a two-locale code base of about 7,600 keys, a 50-hit key search dropped from 12.5 K to 2.3 K characters and a full audit from 6.7 K characters and 1.0 s to 2.0 K characters and 0.4 s.
 - **Upsert semantics.** Writes immediately, validates the whole batch before touching a file (an unknown locale rejects everything), reports conflicts instead of overwriting unless `overwrite:true`, warns about locales without a value and about placeholder mismatches against the values other locales hold.
 - **Confirmation dialogs.** Delete, rename and format use MCP elicitation when the client supports it and fall back to a preview with a hint otherwise.
 - **Server instructions and prompts** (`audit`, `add-key`, `translate-missing`), server metadata (`websiteUrl`, `description`), version read from `package.json`.
