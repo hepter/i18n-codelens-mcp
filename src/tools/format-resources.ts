@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { loadJson, writeFilePretty } from '../core/fs-write';
+import { detectJsonStyle, loadJson, serializeJson, writeFilePretty } from '../core/fs-write';
 import { classifyResourceStructure, flattenObject, reorderTopLevel, unflattenObject, type FlatResourceMap } from '../resource-utils';
 import { omitEmpty, requireProject, selectLocales, type ToolContext } from './shared';
 
@@ -49,7 +49,8 @@ export async function toolFormatResources(args: FormatResourcesArgs, ctx: ToolCo
           next = structure.kind === 'nested' ? unflattenObject(ordered) : ordered;
         }
       }
-      const nextRaw = JSON.stringify(next, null, 2) + '\n';
+      // Keep the file's own indentation and line endings; only structure and key order change.
+      const nextRaw = serializeJson(next, detectJsonStyle(raw));
       if (raw === nextRaw) {
         unchanged++;
         continue;

@@ -76,4 +76,30 @@ describe('writeFilePretty', () => {
   it('refuses a path outside the root', () => {
     expect(() => writeFilePretty(path.join(os.tmpdir(), 'elsewhere.json'), {}, root)).toThrow(/outside workspace root/);
   });
+
+  it('keeps CRLF line endings when the file already uses them', () => {
+    const file = path.join(root, 'en.json');
+    fs.writeFileSync(file, '{\r\n  "a": "1"\r\n}\r\n');
+    writeFilePretty(file, { a: '1', b: '2' }, root);
+    expect(fs.readFileSync(file, 'utf8')).toBe('{\r\n  "a": "1",\r\n  "b": "2"\r\n}\r\n');
+  });
+
+  it('keeps the existing indentation width and tabs', () => {
+    const spaces = path.join(root, 'four.json');
+    fs.writeFileSync(spaces, '{\n    "a": "1"\n}\n');
+    writeFilePretty(spaces, { a: '1', b: '2' }, root);
+    expect(fs.readFileSync(spaces, 'utf8')).toBe('{\n    "a": "1",\n    "b": "2"\n}\n');
+
+    const tabs = path.join(root, 'tabs.json');
+    fs.writeFileSync(tabs, '{\n\t"a": "1"\n}\n');
+    writeFilePretty(tabs, { a: '1', b: '2' }, root);
+    expect(fs.readFileSync(tabs, 'utf8')).toBe('{\n\t"a": "1",\n\t"b": "2"\n}\n');
+  });
+
+  it('keeps a file without a trailing newline that way', () => {
+    const file = path.join(root, 'nonl.json');
+    fs.writeFileSync(file, '{\n  "a": "1"\n}');
+    writeFilePretty(file, { a: '1', b: '2' }, root);
+    expect(fs.readFileSync(file, 'utf8')).toBe('{\n  "a": "1",\n  "b": "2"\n}');
+  });
 });

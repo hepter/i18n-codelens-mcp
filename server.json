@@ -1,0 +1,38 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.hepter/i18n-codelens-mcp",
+  "description": "Inspect, audit and safely edit i18n locale JSON files from AI agents: compact reads, conflict-safe upserts, namespace moves and placeholder checks.",
+  "repository": {
+    "url": "https://github.com/hepter/i18n-codelens-mcp",
+    "source": "github"
+  },
+  "version": "2.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "i18n-codelens-mcp",
+      "version": "2.0.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "WORKSPACE_ROOT",
+          "description": "Absolute path of the project whose locale files should be managed. Defaults to CLAUDE_PROJECT_DIR or the working directory.",
+          "isRequired": false
+        },
+        {
+          "name": "I18N_GLOB",
+          "description": "Glob for locale JSON files (default **/locales/**/*.json).",
+          "isRequired": false
+        },
+        {
+          "name": "I18N_CODE_GLOB",
+          "description": "Glob for source files scanned for t(\"key\") references (default **/*.{ts,tsx,js,jsx}).",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

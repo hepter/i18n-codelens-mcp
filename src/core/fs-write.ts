@@ -13,6 +13,35 @@ export function loadJson(absPath: string, root: string): unknown {
   }
 }
 
+// ─── Formatting style ────────────────────────────────────────────────────────
+
+export type JsonStyle = {
+  /** Indentation unit, e.g. two spaces or a tab. */
+  indent: string;
+  eol: '\n' | '\r\n';
+  finalNewline: boolean;
+};
+
+export const DEFAULT_JSON_STYLE: JsonStyle = { indent: '  ', eol: '\n', finalNewline: true };
+
+/** Indentation, line endings and trailing newline of an existing document, so a write changes only what it must. */
+export function detectJsonStyle(raw: string): JsonStyle {
+  const indentMatch = raw.match(/^([ \t]+)\S/m);
+  return {
+    indent: indentMatch ? indentMatch[1] : DEFAULT_JSON_STYLE.indent,
+    eol: raw.includes('\r\n') ? '\r\n' : '\n',
+    finalNewline: raw.length === 0 ? true : /\r?\n$/.test(raw),
+  };
+}
+
+export function serializeJson(json: unknown, style: JsonStyle = DEFAULT_JSON_STYLE): string {
+  let text = JSON.stringify(json, null, style.indent);
+  if (style.eol !== '\n') text = text.replace(/\n/g, style.eol);
+  return style.finalNewline ? text + style.eol : text;
+}
+
+// ─── Guarded write ───────────────────────────────────────────────────────────
+
 export type WriteGuardOptions = {
   /** Keys the caller means to remove, for example a delete or a rename. */
   allowRemovedKeys?: string[];
@@ -25,11 +54,11 @@ export type WriteGuardOptions = {
  * line of defence: whatever the caller believes it is doing, a translation
  * file may only lose a key that was named as an intended removal.
  */
-function assertNoKeyLoss(target: string, json: unknown, options?: WriteGuardOptions): void {
-  if (options?.allowKeyLoss) return;
+function assertNoKeyLoss(target: string, existingRaw: string | undefined, json: unknown, options?: WriteGuardOptions): void {
+  if (options?.allowKeyLoss || existingRaw === undefined) return;
   let existing: unknown;
   try {
-    existing = JSON.parse(fs.readFileSync(target, 'utf8'));
+    existing = JSON.parse(existingRaw);
   } catch {
     return; // no readable prior document, nothing can be lost
   }
@@ -48,11 +77,20 @@ function assertNoKeyLoss(target: string, json: unknown, options?: WriteGuardOpti
   );
 }
 
-/** Atomic pretty write (2 spaces, trailing newline) guarded against key loss. */
+/**
+ * Atomic write guarded against key loss. The existing file's indentation, line
+ * endings and trailing newline are preserved; a new file gets 2 spaces and LF.
+ */
 export function writeFilePretty(absPath: string, json: unknown, root: string, options?: WriteGuardOptions): void {
   const target = ensureSafeWorkspacePath(absPath, root);
-  assertNoKeyLoss(target, json, options);
-  const content = JSON.stringify(json, null, 2) + '\n';
+  let existingRaw: string | undefined;
+  try {
+    existingRaw = fs.readFileSync(target, 'utf8');
+  } catch {
+    existingRaw = undefined;
+  }
+  assertNoKeyLoss(target, existingRaw, json, options);
+  const content = serializeJson(json, existingRaw === undefined ? DEFAULT_JSON_STYLE : detectJsonStyle(existingRaw));
   const dir = path.dirname(target);
   fs.mkdirSync(dir, { recursive: true });
   const tempFile = path.join(dir, `${path.basename(target)}.${process.pid}.${Date.now()}.tmp`);
