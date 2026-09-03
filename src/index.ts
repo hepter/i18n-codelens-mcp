@@ -1,42 +1,22 @@
 export * from './config';
-export * from './resourceUtils';
-export * from './toolUtils';
-export {
-  getWorkspaceRoot,
-  readResourceFiles,
-  writeFilePretty,
-  loadJson,
-  findUntranslatedKeysInFile,
-  findKeyReferences,
-  ensureSafeWorkspacePath,
-  type ResourceFile,
-  type WriteGuardOptions,
-  type KeyReference,
-  type KeyReferenceSummary,
-} from './i18nFs';
-export {
-  createI18nMcpServer,
-  startServer,
-  normalizeLocaleTag,
-  describeLocale,
-  extractPlaceholders,
-  relativeToWorkspace,
-  toolProjectInfo,
-  toolSearchKeys,
-  toolGetNamespace,
-  toolUnusedKeys,
-  toolAudit,
-  toolFormatResources,
-  toolCheckKeys,
-  toolListLocales,
-  toolGetTranslations,
-  toolUpsertTranslations,
-  toolDeleteKey,
-  toolDiffLocales,
-  toolScanWorkspaceMissing,
-  toolKeyReferences,
-  toolRenameKey,
-  toolMoveNamespace,
-  toolValidatePlaceholders,
-  toolUntranslatedKeysOnPage,
-} from './server';
+export * from './resource-utils';
+export * from './tool-utils';
+export * from './core/locale';
+export * from './core/placeholders';
+export * from './core/workspace';
+export * from './core/fs-write';
+export * from './core/resources';
+export * from './core/code-index';
+export * from './core/resource-manager';
+export * from './tools/shared';
+export * from './tools/project-info';
+export * from './tools/get-translations';
+export * from './tools/search-keys';
+export * from './tools/file-keys';
+export * from './tools/key-references';
+export * from './tools/audit';
+export * from './tools/upsert-translations';
+export * from './tools/delete-keys';
+export * from './tools/rename-key';
+export * from './tools/format-resources';
+export { createI18nMcpServer, SERVER_NAME, SERVER_VERSION, SERVER_INSTRUCTIONS, TOOL_NAMES, type I18nServerOptions, type Logger } from './server';

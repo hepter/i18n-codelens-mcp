@@ -8,7 +8,7 @@ import {
   setNestedValue,
   deleteNestedKey,
   type FlatResourceMap,
-} from '../resourceUtils';
+} from '../resource-utils';
 
 describe('isObjectNested', () => {
   it('flat object → false', () => {

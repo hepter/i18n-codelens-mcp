@@ -6,7 +6,7 @@ import {
   previewText,
   shouldDryRun,
   uniqueStrings,
-} from '../toolUtils';
+} from '../tool-utils';
 
 describe('normalizeLimit', () => {
   it('uses fallback for invalid input', () => {

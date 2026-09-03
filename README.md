@@ -125,6 +125,154 @@ Use the same stdio server shape in the client's MCP config:
 }
 ```
 
+### Google Antigravity (IDE, CLI and 2.0)
+
+Antigravity IDE, Antigravity CLI and Antigravity 2.0 share one MCP config file:
+
+- Global: `~/.gemini/config/mcp_config.json` (Windows: `%USERPROFILE%\.gemini\config\mcp_config.json`)
+- Per project: `.agents/mcp_config.json` in the workspace root
+
+In the IDE, open it with **…** (top of the agent side panel) → **MCP Servers** → **Manage MCP Servers** → **View raw config**. In the CLI, type `/mcp` to open the MCP Manager and reload configs.
+
+```json
+{
+  "mcpServers": {
+    "i18n-codelens": {
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "cwd": "/absolute/path/to/project",
+      "env": {
+        "WORKSPACE_ROOT": "/absolute/path/to/project"
+      }
+    }
+  }
+}
+```
+
+Antigravity also accepts `disabled: true` and `disabledTools: ["i18n_format_resources"]` per server if you want to hide write tools from the model. Use absolute paths for `command` when `npx` is not on the PATH of the IDE process.
+
+### Kiro
+
+Workspace config lives in `.kiro/settings/mcp.json`, user-wide config in `~/.kiro/settings/mcp.json` (workspace wins). Open either via the command palette: **Kiro: Open workspace MCP config (JSON)**.
+
+```json
+{
+  "mcpServers": {
+    "i18n-codelens": {
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" },
+      "disabled": false,
+      "autoApprove": ["i18n_project_info", "i18n_list_locales", "i18n_check_keys", "i18n_get_translations", "i18n_search_keys", "i18n_get_namespace"]
+    }
+  }
+}
+```
+
+### OpenCode
+
+OpenCode uses an `mcp` object in `opencode.json` (project root or `~/.config/opencode/`). The command is an array, and env vars go under `environment`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "i18n-codelens": {
+      "type": "local",
+      "command": ["npx", "-y", "i18n-codelens-mcp"],
+      "environment": { "WORKSPACE_ROOT": "/absolute/path/to/project" },
+      "enabled": true
+    }
+  }
+}
+```
+
+`["bun", "x", "i18n-codelens-mcp"]` works as well if you prefer Bun.
+
+### GitHub Copilot CLI
+
+User-level config is `~/.copilot/mcp-config.json`. For a repository, commit `.github/mcp.json` (shared) or drop an uncommitted `.mcp.json` at the project root. Copilot CLI uses `type: "local"` for stdio servers:
+
+```json
+{
+  "mcpServers": {
+    "i18n-codelens": {
+      "type": "local",
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" },
+      "tools": ["*"]
+    }
+  }
+}
+```
+
+### Zed
+
+Zed calls MCP servers `context_servers`. Add to `~/.config/zed/settings.json` or, for the team, to `.zed/settings.json` in the repository:
+
+```json
+{
+  "context_servers": {
+    "i18n-codelens": {
+      "source": "custom",
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" }
+    }
+  }
+}
+```
+
+### Cline and Roo Code
+
+Open the extension panel → **MCP Servers** → **Configure MCP Servers** to edit `cline_mcp_settings.json` (Roo Code: `mcp_settings.json`, or `.roo/mcp.json` per project). The shape is the standard `mcpServers` object with two extra flags:
+
+```json
+{
+  "mcpServers": {
+    "i18n-codelens": {
+      "command": "npx",
+      "args": ["-y", "i18n-codelens-mcp"],
+      "env": { "WORKSPACE_ROOT": "/absolute/path/to/project" },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+### Sharing the server with a team
+
+Commit a project-level config so every teammate and every agent gets the same server without touching global settings. The file name depends on the client:
+
+| Client | Project-level file |
+|---|---|
+| Claude Code | `.mcp.json` (`claude mcp add --scope project --transport stdio i18n-codelens -- npx -y i18n-codelens-mcp`) |
+| GitHub Copilot CLI | `.github/mcp.json` or `.mcp.json` |
+| Antigravity | `.agents/mcp_config.json` |
+| Kiro | `.kiro/settings/mcp.json` |
+| Zed | `.zed/settings.json` |
+| OpenCode | `opencode.json` |
+| Cursor | `.cursor/mcp.json` |
+| VS Code / Copilot Chat | `.vscode/mcp.json` |
+| Roo Code | `.roo/mcp.json` |
+
+When the client starts the server from the project directory, `WORKSPACE_ROOT` can be omitted: the server falls back to the current working directory. Set it explicitly whenever the client's cwd is not guaranteed, which is the case for most global configs.
+
+### Faster startup: Bun or a pinned install
+
+`npx -y` resolves the package on every start. For a snappier, offline-safe setup pick one of:
+
+```bash
+# Bun (cached after the first run)
+bunx i18n-codelens-mcp
+
+# Pinned global install, then reference the binary directly
+npm install -g i18n-codelens-mcp@1
+# "command": "i18n-codelens-mcp"
+```
+
 ## Workspace Root
 
 The server must know which project to scan and edit. Resolution order:
