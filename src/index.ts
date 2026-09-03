@@ -10,6 +10,7 @@ export {
   findKeyReferences,
   ensureSafeWorkspacePath,
   type ResourceFile,
+  type WriteGuardOptions,
   type KeyReference,
   type KeyReferenceSummary,
 } from './i18nFs';

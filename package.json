@@ -1,6 +1,6 @@
 {
   "name": "i18n-codelens-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for i18n translation management — scan, diff, upsert, rename, and validate locale resources from AI agents.",
   "private": false,
   "main": "./out/index.js",
@@ -70,7 +70,8 @@
   },
   "homepage": "https://github.com/hepter/i18n-codelens-mcp#readme",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "sideEffects": false,
   "engines": {

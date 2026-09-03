@@ -2,7 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import fg from 'fast-glob';
 import ignore from 'ignore';
-import { flattenObject, isObjectNested, setNestedValue, deleteNestedKey, type FlatResourceMap } from './resourceUtils';
+import {
+  flattenObject,
+  isObjectNested,
+  classifyResourceStructure,
+  setNestedValue,
+  deleteNestedKey,
+  type FlatResourceMap,
+  type ResourceStructure,
+} from './resourceUtils';
 import { DEFAULT_RESOURCE_GLOB, DEFAULT_CODE_GLOB, buildCodeRegex, getEffectiveConfigFromEnv } from './config';
 
 export { setNestedValue, deleteNestedKey };
@@ -11,7 +19,10 @@ export type { FlatResourceMap };
 export type ResourceFile = {
   filePath: string;
   fileName: string;
+  /** True when anything nests at all. Prefer `structure` when choosing a shape. */
   isNested: boolean;
+  /** How the leaves are actually stored: flat, nested, or both. */
+  structure: ResourceStructure;
   keyValuePairs: FlatResourceMap;
 };
 
@@ -114,8 +125,47 @@ export function loadJson(absPath: string, workspaceRootOverride?: string): unkno
   return JSON.parse(raw);
 }
 
-export function writeFilePretty(absPath: string, json: unknown, workspaceRootOverride?: string): void {
+export type WriteGuardOptions = {
+  /** Keys the caller means to remove, for example a delete or a rename. */
+  allowRemovedKeys?: string[];
+  /** Skip the guard entirely. Only for files that are not locale resources. */
+  allowKeyLoss?: boolean;
+};
+
+/**
+ * Refuse a write that would drop keys the file already has.
+ *
+ * This is the last line of defence and it is deliberately blunt: whatever the
+ * caller believes it is doing, a translation file may only lose a key that was
+ * named as an intended removal.
+ */
+function assertNoKeyLoss(target: string, json: unknown, options?: WriteGuardOptions): void {
+  if (options?.allowKeyLoss) return;
+
+  let existing: unknown;
+  try {
+    existing = JSON.parse(fs.readFileSync(target, 'utf8'));
+  } catch {
+    return; // No readable prior document, so nothing can be lost.
+  }
+  if (typeof existing !== 'object' || existing === null || Array.isArray(existing)) return;
+
+  const allowed = new Set(options?.allowRemovedKeys ?? []);
+  const nextKeys = new Set(Object.keys(flattenObject(json)));
+  const lost = Object.keys(flattenObject(existing)).filter(key => !nextKeys.has(key) && !allowed.has(key));
+  if (!lost.length) return;
+
+  const shown = lost.slice(0, 5).join(', ');
+  const rest = lost.length > 5 ? `, and ${lost.length - 5} more` : '';
+  throw new Error(
+    `Refusing to write ${path.basename(target)}: the new content is missing ${lost.length} existing key(s) (${shown}${rest}). ` +
+    'Nothing was written. Declare intended removals with allowRemovedKeys.'
+  );
+}
+
+export function writeFilePretty(absPath: string, json: unknown, workspaceRootOverride?: string, options?: WriteGuardOptions): void {
   const target = ensureSafeWorkspacePath(absPath, workspaceRootOverride);
+  assertNoKeyLoss(target, json, options);
   const content = JSON.stringify(json, null, 2) + '\n';
   const dir = path.dirname(target);
   fs.mkdirSync(dir, { recursive: true });
@@ -165,6 +215,7 @@ export async function readResourceFiles(globPattern?: string, workspaceRootOverr
         filePath: absPath,
         fileName: path.parse(absPath).name,
         isNested: isObjectNested(json),
+        structure: classifyResourceStructure(json),
         keyValuePairs: flattenObject(json),
       });
     } catch { /* skip invalid JSON */ }

@@ -21,9 +21,14 @@ import {
 } from './i18nFs';
 import {
   flattenObject,
+  flattenObjectPaths,
   unflattenObject,
   reorderFlatMap,
+  reorderTopLevel,
+  orderKeys,
+  classifyResourceStructure,
   type FlatResourceMap,
+  type ResourceStructure,
 } from './resourceUtils';
 import {
   getEffectiveConfigFromEnv,
@@ -46,17 +51,32 @@ import {
 type PresenceResult = Record<string, Record<string, boolean>>;
 type UpsertOutcome = 'created' | 'updated' | 'unchanged' | 'error';
 
+/**
+ * How a file will be written back.
+ * - flat / nested: the document is rebuilt in that shape.
+ * - preserve: a mixed document, edited in place; nothing is converted.
+ */
+type WriteStructure = 'flat' | 'nested' | 'preserve';
+
 type ResourceState = {
   resource: ResourceFile;
   locale: string;
   localeFile: string;
   filePath: string;
-  writeStructure: 'flat' | 'nested';
+  writeStructure: WriteStructure;
   json?: Record<string, unknown>;
   flatMap?: FlatResourceMap;
   initialFlat: FlatResourceMap;
   createdKeys: string[];
+  /** Removals the caller asked for; the only keys allowed to disappear. */
+  removedKeys: string[];
   changed: boolean;
+  /** preserve mode: where a brand new key goes. */
+  dominant?: 'flat' | 'nested';
+  /** preserve mode: flat key -> the real property path holding it. */
+  pathIndex?: Record<string, string[]>;
+  /** preserve mode: top-level property order as loaded. */
+  initialTopLevelKeys?: string[];
 };
 
 type StructureSummary = {
@@ -219,22 +239,60 @@ export function relativeToWorkspace(filePath: string, workspaceDir?: string): st
   return !relative || relative.startsWith('..') ? filePath : relative;
 }
 
-function determineWriteStructure(resource: ResourceFile, preference: StructurePreference): 'flat' | 'nested' {
-  if (preference === 'auto') return resource.isNested ? 'nested' : 'flat';
-  return preference;
+/**
+ * Choose the write shape.
+ *
+ * Under 'auto' a MIXED file is preserved rather than converted. One nested
+ * island used to make a file of thousands of flat keys "nested", and the
+ * conversion that followed destroyed every key whose name was both a value and
+ * a namespace.
+ */
+function determineWriteStructure(structure: ResourceStructure, preference: StructurePreference): WriteStructure {
+  if (preference !== 'auto') return preference;
+  if (structure.kind === 'mixed') return 'preserve';
+  return structure.kind === 'nested' ? 'nested' : 'flat';
+}
+
+function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function createResourceState(resource: ResourceFile, preference: StructurePreference, workspaceDir?: string): ResourceState {
   const locale = normalizeLocaleTag(resource.fileName);
   const localeFile = relativeToWorkspace(resource.filePath, workspaceDir);
-  const writeStructure = determineWriteStructure(resource, preference);
   const json = loadJson(resource.filePath, workspaceDir) as Record<string, unknown>;
+  const structure = classifyResourceStructure(json);
+  const writeStructure = determineWriteStructure(structure, preference);
+  const base = {
+    resource,
+    locale,
+    localeFile,
+    filePath: resource.filePath,
+    writeStructure,
+    createdKeys: [] as string[],
+    removedKeys: [] as string[],
+    changed: false,
+  };
 
   if (writeStructure === 'flat') {
     const flatMap = flattenObject(json);
-    return { resource, locale, localeFile, filePath: resource.filePath, writeStructure, flatMap: { ...flatMap }, initialFlat: { ...flatMap }, createdKeys: [], changed: false };
+    return { ...base, writeStructure, flatMap: { ...flatMap }, initialFlat: { ...flatMap } };
   }
-  return { resource, locale, localeFile, filePath: resource.filePath, writeStructure, json: { ...json }, initialFlat: flattenObject(json), createdKeys: [], changed: false };
+
+  if (writeStructure === 'nested') {
+    return { ...base, writeStructure, json: { ...json }, initialFlat: flattenObject(json) };
+  }
+
+  const working = { ...json };
+  return {
+    ...base,
+    writeStructure,
+    json: working,
+    initialFlat: flattenObject(working),
+    dominant: structure.dominant,
+    pathIndex: flattenObjectPaths(working),
+    initialTopLevelKeys: Object.keys(working),
+  };
 }
 
 function readNestedValue(target: Record<string, unknown> | undefined, key: string): string | undefined {
@@ -247,8 +305,85 @@ function readNestedValue(target: Record<string, unknown> | undefined, key: strin
   return typeof current === 'undefined' || current === null ? undefined : String(current);
 }
 
+// ─── preserve mode: edit a mixed document where its keys already are ─────────
+
+function readAtPath(target: Record<string, unknown> | undefined, segments: string[]): string | undefined {
+  let current: unknown = target;
+  for (const segment of segments) {
+    if (!isPlainObjectValue(current)) return undefined;
+    current = current[segment];
+  }
+  return typeof current === 'undefined' || current === null ? undefined : String(current);
+}
+
+function writeAtPath(target: Record<string, unknown>, segments: string[], value: string): void {
+  let current = target;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const segment = segments[i];
+    if (!Object.prototype.hasOwnProperty.call(current, segment)) {
+      current[segment] = {};
+    } else if (!isPlainObjectValue(current[segment])) {
+      throw new Error(`Cannot write '${segments.join('.')}': '${segments.slice(0, i + 1).join('.')}' already holds a value.`);
+    }
+    current = current[segment] as Record<string, unknown>;
+  }
+  const last = segments[segments.length - 1];
+  if (isPlainObjectValue(current[last])) {
+    const size = Object.keys(current[last] as Record<string, unknown>).length;
+    throw new Error(`Cannot write '${segments.join('.')}': it is a namespace holding ${size} entr(ies). Writing a value here would delete them.`);
+  }
+  current[last] = value;
+}
+
+function deleteAtPath(target: Record<string, unknown>, segments: string[]): void {
+  let current: Record<string, unknown> = target;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const next = current[segments[i]];
+    if (!isPlainObjectValue(next)) return;
+    current = next;
+  }
+  delete current[segments[segments.length - 1]];
+}
+
+/** True when every segment of the path is free or already an object. */
+function canPlaceNested(json: Record<string, unknown>, segments: string[]): boolean {
+  let current: Record<string, unknown> = json;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const next = current[segments[i]];
+    if (typeof next === 'undefined') return true; // the rest of the path is new
+    if (!isPlainObjectValue(next)) return false; // an ancestor holds a value
+    current = next;
+  }
+  return !isPlainObjectValue(current[segments[segments.length - 1]]);
+}
+
+/**
+ * Where a brand new key goes in a mixed file: the file's dominant style, and a
+ * literal dotted property whenever the nested path is blocked. A literal
+ * property can never collide, so this branch cannot delete anything.
+ */
+function choosePreservePath(state: ResourceState, key: string): string[] {
+  const json = state.json ?? {};
+  const literalIsFree = !isPlainObjectValue(json[key]);
+  if (state.dominant === 'nested') {
+    const segments = key.split('.');
+    if (canPlaceNested(json, segments)) return segments;
+    if (literalIsFree) return [key];
+    throw new Error(`Cannot create '${key}' in ${state.localeFile}: the name is already a namespace and both placements would delete keys.`);
+  }
+  if (literalIsFree) return [key];
+  const segments = key.split('.');
+  if (canPlaceNested(json, segments)) return segments;
+  throw new Error(`Cannot create '${key}' in ${state.localeFile}: the name is already a namespace and both placements would delete keys.`);
+}
+
 export function getValueFromState(state: ResourceState, key: string): string | undefined {
-  return state.writeStructure === 'flat' ? state.flatMap?.[key] : readNestedValue(state.json, key);
+  if (state.writeStructure === 'flat') return state.flatMap?.[key];
+  if (state.writeStructure === 'preserve') {
+    const segments = state.pathIndex?.[key];
+    return segments ? readAtPath(state.json, segments) : undefined;
+  }
+  return readNestedValue(state.json, key);
 }
 
 export function applyValueToState(state: ResourceState, key: string, value: string): void {
@@ -256,6 +391,18 @@ export function applyValueToState(state: ResourceState, key: string, value: stri
     if (!state.flatMap) state.flatMap = {};
     if (typeof state.flatMap[key] === 'undefined' && !state.createdKeys.includes(key)) state.createdKeys.push(key);
     state.flatMap[key] = value;
+  } else if (state.writeStructure === 'preserve') {
+    if (!state.json) state.json = {};
+    if (!state.pathIndex) state.pathIndex = flattenObjectPaths(state.json);
+    const existing = state.pathIndex[key];
+    if (existing) {
+      writeAtPath(state.json, existing, value);
+    } else {
+      const target = choosePreservePath(state, key);
+      writeAtPath(state.json, target, value);
+      state.pathIndex[key] = target;
+      if (!state.createdKeys.includes(key)) state.createdKeys.push(key);
+    }
   } else {
     if (!state.json) state.json = {};
     if (typeof readNestedValue(state.json, key) === 'undefined' && !state.createdKeys.includes(key)) state.createdKeys.push(key);
@@ -264,25 +411,47 @@ export function applyValueToState(state: ResourceState, key: string, value: stri
   state.changed = true;
 }
 
+function recordRemoval(state: ResourceState, key: string): void {
+  if (!state.removedKeys.includes(key)) state.removedKeys.push(key);
+}
+
 export function deleteKeyFromState(state: ResourceState, key: string): boolean {
   if (state.writeStructure === 'flat') {
     if (state.flatMap && Object.prototype.hasOwnProperty.call(state.flatMap, key)) {
       delete state.flatMap[key];
+      recordRemoval(state, key);
       state.changed = true;
       return true;
     }
     return false;
   }
+
+  if (state.writeStructure === 'preserve') {
+    const pathIndex = state.pathIndex;
+    const segments = pathIndex?.[key];
+    if (!segments || !pathIndex || !state.json) return false;
+    deleteAtPath(state.json, segments);
+    delete pathIndex[key];
+    recordRemoval(state, key);
+    state.changed = true;
+    return true;
+  }
+
   const before = readNestedValue(state.json, key);
   if (typeof before === 'undefined') return false;
-  if (state.json) { deleteNestedKey(state.json, key); state.changed = true; return true; }
+  if (state.json) {
+    deleteNestedKey(state.json, key);
+    recordRemoval(state, key);
+    state.changed = true;
+    return true;
+  }
   return false;
 }
 
 export function listKeysFromState(state: ResourceState): string[] {
-  return state.writeStructure === 'flat'
-    ? Object.keys(state.flatMap ?? {})
-    : Object.keys(flattenObject(state.json ?? {}));
+  if (state.writeStructure === 'flat') return Object.keys(state.flatMap ?? {});
+  if (state.writeStructure === 'preserve') return Object.keys(state.pathIndex ?? {});
+  return Object.keys(flattenObject(state.json ?? {}));
 }
 
 export function createResourceManager(
@@ -315,13 +484,24 @@ export function createResourceManager(
     if (dryRun) return files;
     for (const state of stateMap.values()) {
       if (!state.changed) continue;
+      // The guard below is the reason a bug in this function cannot delete a
+      // translation: only keys the caller asked to remove may disappear.
+      const guard = { allowRemovedKeys: state.removedKeys };
       if (state.writeStructure === 'flat') {
         const ordered = reorderFlatMap(state.initialFlat, state.flatMap ?? {}, state.createdKeys, insertOrder);
-        writeFilePretty(state.filePath, ordered, workspaceDir);
+        writeFilePretty(state.filePath, ordered, workspaceDir, guard);
+      } else if (state.writeStructure === 'preserve') {
+        const json = state.json ?? {};
+        const currentTop = Object.keys(json);
+        const initialTop = state.initialTopLevelKeys ?? [];
+        const initialTopSet = new Set(initialTop);
+        const createdTop = currentTop.filter(name => !initialTopSet.has(name));
+        const orderedTop = orderKeys(initialTop, currentTop, createdTop, insertOrder);
+        writeFilePretty(state.filePath, reorderTopLevel(json, orderedTop), workspaceDir, guard);
       } else {
         const currentFlat = flattenObject(state.json ?? {});
         const orderedFlat = reorderFlatMap(state.initialFlat, currentFlat, state.createdKeys, insertOrder);
-        writeFilePretty(state.filePath, unflattenObject(orderedFlat), workspaceDir);
+        writeFilePretty(state.filePath, unflattenObject(orderedFlat), workspaceDir, guard);
       }
       state.changed = false;
     }
@@ -518,6 +698,7 @@ export async function toolProjectInfo(args: { workspaceDir?: string } = {}) {
     locale: normalizeLocaleTag(res.fileName),
     localeFile: relativeToWorkspace(res.filePath, workspaceDir),
     isNested: res.isNested,
+    structure: res.structure.kind,
     keyCount: Object.keys(res.keyValuePairs).length,
   }));
 
@@ -726,10 +907,17 @@ export async function toolFormatResources(args: {
       const json = loadJson(target, workspaceDir) as Record<string, unknown>;
       let nextJson: Record<string, unknown>;
       if (sortKeys) {
-        const flat = flattenObject(json);
-        const ordered: FlatResourceMap = {};
-        for (const key of Object.keys(flat).sort((a, b) => a.localeCompare(b))) ordered[key] = flat[key];
-        nextJson = resource.isNested ? unflattenObject(ordered) : ordered;
+        const structure = classifyResourceStructure(json);
+        if (structure.kind === 'mixed') {
+          // Sort the top level only. Restructuring a mixed file would have to
+          // merge a leaf and a namespace of the same name, which loses one.
+          nextJson = reorderTopLevel(json, Object.keys(json).sort((a, b) => a.localeCompare(b)));
+        } else {
+          const flat = flattenObject(json);
+          const ordered: FlatResourceMap = {};
+          for (const key of Object.keys(flat).sort((a, b) => a.localeCompare(b))) ordered[key] = flat[key];
+          nextJson = structure.kind === 'nested' ? unflattenObject(ordered) : ordered;
+        }
       } else {
         nextJson = json;
       }
@@ -887,6 +1075,7 @@ export async function toolListLocales(args: { workspaceDir?: string } = {}) {
     localeFile: relativeToWorkspace(res.filePath, workspaceDir),
     description: describeLocale(normalizeLocaleTag(res.fileName)),
     isNested: res.isNested,
+    structure: res.structure.kind,
     keyCount: Object.keys(res.keyValuePairs).length,
   }));
   return { languages: locales.map(l => l.locale), locales };

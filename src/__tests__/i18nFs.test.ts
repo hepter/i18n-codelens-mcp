@@ -125,11 +125,23 @@ describe('writeFilePretty', () => {
     expect(fs.existsSync(file)).toBe(true);
   });
 
-  it('overwrites existing file', () => {
+  it('overwrites existing file while keeping its keys', () => {
     const file = writeTmpFile('over.json', '{"old":"value"}');
-    writeFilePretty(file, { new: 'value' }, tmpDir);
+    writeFilePretty(file, { old: 'value', new: 'value' }, tmpDir);
     const result = JSON.parse(fs.readFileSync(file, 'utf8'));
-    expect(result).toEqual({ new: 'value' });
+    expect(result).toEqual({ old: 'value', new: 'value' });
+  });
+
+  it('refuses an overwrite that would drop an existing key', () => {
+    const file = writeTmpFile('over-lossy.json', '{"old":"value"}');
+    expect(() => writeFilePretty(file, { new: 'value' }, tmpDir)).toThrow(/missing 1 existing key/);
+    expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ old: 'value' });
+  });
+
+  it('overwrites anything when the caller opts out of the guard', () => {
+    const file = writeTmpFile('over-forced.json', '{"old":"value"}');
+    writeFilePretty(file, { new: 'value' }, tmpDir, { allowKeyLoss: true });
+    expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ new: 'value' });
   });
 
   it('throws for path outside workspace', () => {

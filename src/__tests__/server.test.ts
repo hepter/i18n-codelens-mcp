@@ -30,6 +30,9 @@ import {
   toolUntranslatedKeysOnPage,
 } from '../server';
 
+/** Shape stub for the ResourceFile mocks below; createResourceState re-reads the file. */
+const MOCK_FLAT_STRUCTURE = { kind: 'flat', dominant: 'flat', flatLeafCount: 1, nestedLeafCount: 0 } as const;
+
 // ─── Temp directory fixture helpers ─────────────────────────────────────────
 
 let tmpDir = '';
@@ -179,6 +182,7 @@ describe('createResourceState / get/applyValueToState / deleteKeyFromState', () 
       filePath: path.join(tmpDir, 'locales', 'en.json'),
       fileName: 'en',
       isNested: false,
+      structure: MOCK_FLAT_STRUCTURE,
       keyValuePairs: { greeting: 'Hello' } as Record<string, string>,
     };
     const state = createResourceState(resource, 'flat', tmpDir);
@@ -190,6 +194,7 @@ describe('createResourceState / get/applyValueToState / deleteKeyFromState', () 
       filePath: path.join(tmpDir, 'locales', 'en.json'),
       fileName: 'en',
       isNested: false,
+      structure: MOCK_FLAT_STRUCTURE,
       keyValuePairs: { existing: 'value' } as Record<string, string>,
     };
     writeLocale('en.json', { existing: 'value' });
@@ -205,6 +210,7 @@ describe('createResourceState / get/applyValueToState / deleteKeyFromState', () 
       filePath: path.join(tmpDir, 'locales', 'en.json'),
       fileName: 'en',
       isNested: false,
+      structure: MOCK_FLAT_STRUCTURE,
       keyValuePairs: { toDelete: 'bye' } as Record<string, string>,
     };
     writeLocale('en.json', { toDelete: 'bye' });
@@ -220,6 +226,7 @@ describe('createResourceState / get/applyValueToState / deleteKeyFromState', () 
       filePath: path.join(tmpDir, 'locales', 'en.json'),
       fileName: 'en',
       isNested: false,
+      structure: MOCK_FLAT_STRUCTURE,
       keyValuePairs: {} as Record<string, string>,
     };
     writeLocale('en.json', {});
@@ -234,6 +241,7 @@ describe('createResourceState / get/applyValueToState / deleteKeyFromState', () 
       filePath: path.join(tmpDir, 'locales', 'en.json'),
       fileName: 'en',
       isNested: false,
+      structure: MOCK_FLAT_STRUCTURE,
       keyValuePairs: { a: '1', b: '2' } as Record<string, string>,
     };
     writeLocale('en.json', { a: '1', b: '2' });
